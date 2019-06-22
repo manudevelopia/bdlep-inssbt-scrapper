@@ -83,8 +83,6 @@ func main() {
 		_ = c.Visit(a.Request.AbsoluteURL(a.Attr("href")))
 	})
 
-	c.Visit("http://bdlep.inssbt.es/LEP/vlapr.jsp?ID=30&nombre=Acetato%20de%20vinilo")
-
 	// Iterate on each page ::
 	for i := 1; i <= pages; i++ {
 		_ = c.Visit(fmt.Sprintf("http://bdlep.inssbt.es/LEP/vlaallpr.jsp?Bloque=%d", i))
