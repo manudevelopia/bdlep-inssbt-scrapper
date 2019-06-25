@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/gocolly/colly"
+	"log"
 	"strings"
+	"time"
 )
 
 type Note struct {
@@ -65,7 +67,7 @@ func main() {
 
 		if strings.Contains(td.Request.URL.String(), "&FH=") {
 			fmt.Printf("Warning :: %s - %d\n", td.Text, td.Index)
-		} else if strings.Contains(td.Request.URL.String(), "&nombre="){
+		} else if strings.Contains(td.Request.URL.String(), "&nombre=") {
 			fmt.Printf("Note :: %s - %d\n", td.Text, td.Index)
 		}
 
@@ -75,7 +77,10 @@ func main() {
 	c.OnScraped(func(r *colly.Response) {
 		fmt.Println(" - Finished", r.Request.URL)
 
-		composes = append(composes, compose)
+		// add compose to collection only when finish compose information page
+		if strings.Contains(r.Request.URL.String(), "vlapr.jsp?") {
+			composes = append(composes, compose)
+		}
 	})
 
 	// get the hazard advices links
