@@ -31,8 +31,16 @@ func main() {
 		colly.AllowedDomains("bdlep.inssbt.es"),
 	)
 
+	_ = c.Limit(&colly.LimitRule{
+		Delay: 2 * time.Second,
+	})
+
 	c.OnRequest(func(request *colly.Request) {
 		fmt.Println("Visiting: ", request.URL)
+	})
+
+	c.OnError(func(_ *colly.Response, err error) {
+		log.Println("Something went wrong:", err)
 	})
 
 	// Get all compose links
