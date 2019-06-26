@@ -9,16 +9,16 @@ import (
 )
 
 type Advise struct {
-	code  string
-	title string
+	Code  string `json:"code"`
+	Title string `json:"title"`
 }
 
 type Compose struct {
-	Link  string
-	Name  string
-	Vlas  [4]string
-	Notes []Advise
-	Warns []Advise
+	Link  string    `json:"link"`
+	Name  string    `json:"name"`
+	Vlas  [4]string `json:"vlas"`
+	Notes []Advise  `json:"notes"`
+	Warns []Advise  `json:"warns"`
 }
 
 func main() {
@@ -92,6 +92,7 @@ func main() {
 		// add compose to collection only when finish compose information page
 		if strings.Contains(url, "vlapr.jsp?") {
 			composes = append(composes, compose)
+			sendPost(compose)
 		} else if strings.Contains(url, "&FH=") {
 			compose.Warns = append(compose.Warns, advise)
 		} else if strings.Contains(url, "&nombre=") {
@@ -114,12 +115,35 @@ func main() {
 
 func parseAdvise(tdAdvise *colly.HTMLElement, advice *Advise) {
 	if tdAdvise.Index%2 == 0 {
-		advice.code = tdAdvise.Text
+		advice.Code = tdAdvise.Text
 	} else {
-		advice.title = tdAdvise.Text
+		advice.Title = tdAdvise.Text
 	}
 }
 
 func saneUrl(url string) string {
 	return strings.ReplaceAll(url, " ", "%20")
+}
+
+func sendPost(compose Compose) {
+	url := "http://localhost:8080/api/compounds/update"
+	fmt.Println("URL:>", url)
+
+	var jsonData []byte
+	jsonData, _ = json.Marshal(compose)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	req.Header.Set("X-Custom-Header", "myvalue")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("response Status:", resp.Status)
+	fmt.Println("response Headers:", resp.Header)
+	body, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println("response Body:", string(body))
 }
