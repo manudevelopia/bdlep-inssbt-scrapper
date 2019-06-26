@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/gocolly/colly"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 )
