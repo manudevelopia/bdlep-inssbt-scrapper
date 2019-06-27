@@ -20,6 +20,8 @@ type Advise struct {
 type Compose struct {
 	Link  string    `json:"link"`
 	Name  string    `json:"name"`
+	Ncas  string    `json:"ncas"`
+	Nce   string   	`json:"nce"`
 	Vlas  [4]string `json:"vlas"`
 	Notes []Advise  `json:"notes"`
 	Warns []Advise  `json:"warns"`
@@ -66,6 +68,15 @@ func main() {
 		}
 	})
 
+	// get nCAS, nCE
+	c.OnHTML("span[class='destacado']", func(span *colly.HTMLElement) {
+		if span.Index == 0 {
+			compose.Ncas = span.Text
+		} else if span.Index == 1 {
+			compose.Nce = span.Text
+		}
+	})
+
 	// get the 4 environmental values VLA-ED and VLA-EC
 	c.OnHTML("table[class='valores'] tr:not([class='cabecera']) td", func(td *colly.HTMLElement) {
 		fmt.Printf("VL :: %s - %d\n", td.Text, td.Index)
@@ -96,7 +107,7 @@ func main() {
 		// add compose to collection only when finish compose information page
 		if strings.Contains(url, "vlapr.jsp?") {
 			composes = append(composes, compose)
-			sendPost(compose)
+			//sendPost(compose)
 		} else if strings.Contains(url, "&FH=") {
 			compose.Warns = append(compose.Warns, advise)
 		} else if strings.Contains(url, "&nombre=") {
@@ -130,7 +141,7 @@ func saneUrl(url string) string {
 }
 
 func sendPost(compose Compose) {
-	url := "http://localhost:8080/api/compounds/update"
+	url := "http://localhost:8080/api/scrapper/compound"
 	fmt.Println("URL:>", url)
 
 	var jsonData []byte
@@ -150,4 +161,10 @@ func sendPost(compose Compose) {
 	fmt.Println("response Headers:", resp.Header)
 	body, _ := ioutil.ReadAll(resp.Body)
 	fmt.Println("response Body:", string(body))
+}
+
+
+func parseToNumber(string string) int {
+
+	return 1
 }
