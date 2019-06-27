@@ -48,7 +48,7 @@ func main() {
 	})
 
 	c.OnError(func(_ *colly.Response, err error) {
-		log.Println("Somethiwent wrong:", err)
+		log.Println("Something went wrong:", err)
 	})
 
 	// Get all compose links
