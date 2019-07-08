@@ -18,13 +18,14 @@ type Advise struct {
 }
 
 type Compose struct {
-	Link  string    `json:"link"`
-	Name  string    `json:"name"`
-	Ncas  string    `json:"ncas"`
-	Nce   string   	`json:"nce"`
-	Vlas  [4]string `json:"vlas"`
-	Notes []Advise  `json:"notes"`
-	Warns []Advise  `json:"warns"`
+	Url    string    `json:"url"`
+	Name   string    `json:"name"`
+	Parent string    `json:"parent"`
+	Ncas   string    `json:"ncas"`
+	Nce    string    `json:"nce"`
+	Vlas   [4]string `json:"vlas"`
+	Notes  []Advise  `json:"notes"`
+	Warns  []Advise  `json:"warns"`
 }
 
 func main() {
@@ -32,7 +33,7 @@ func main() {
 	var composes []Compose
 	compose := Compose{}
 	advise := Advise{}
-	pages := 1 //46
+	pages := 46
 
 	// Create collector
 	c := colly.NewCollector(
@@ -55,10 +56,10 @@ func main() {
 	c.OnHTML("table[class='contents'] a[href*=nombre]", func(a *colly.HTMLElement) {
 		fmt.Println(a.Text)
 
-		compose.Link = a.Request.AbsoluteURL(a.Attr("href"))
+		compose.Url = a.Request.AbsoluteURL(a.Attr("href"))
 		compose.Name = a.Text
 
-		_ = c.Visit(saneUrl(compose.Link))
+		_ = c.Visit(saneUrl(compose.Url))
 	})
 
 	// get nCAS, nCE and Compose Name
@@ -70,6 +71,10 @@ func main() {
 
 	// get nCAS, nCE
 	c.OnHTML("span[class='destacado']", func(span *colly.HTMLElement) {
+		if span.Text == "Indicaciones de peligro H" || len(span.Text) <= 4 {
+			return
+		}
+
 		if span.Index == 0 {
 			compose.Ncas = span.Text
 		} else if span.Index == 1 {
@@ -90,16 +95,23 @@ func main() {
 			return
 		}
 
-		if strings.Contains(td.Request.URL.String(), "&FH=") {
-			fmt.Printf("Warning :: %s - %d\n", td.Text, td.Index)
-		} else if strings.Contains(td.Request.URL.String(), "&nombre=") {
-			fmt.Printf("Note :: %s - %d\n", td.Text, td.Index)
+		parseAdvise(td, &advise)
+
+		if advise.Title != "" {
+			if strings.Contains(td.Request.URL.String(), "&FH=") {
+				fmt.Printf("Warning :: %s - %d\n", td.Text, td.Index)
+				compose.Warns = append(compose.Warns, advise)
+				advise = Advise{}
+			} else if strings.Contains(td.Request.URL.String(), "&nombre=") {
+				fmt.Printf("Note :: %s - %d\n", td.Text, td.Index)
+				compose.Notes = append(compose.Notes, advise)
+				advise = Advise{}
+			}
 		}
 
-		parseAdvise(td, &advise)
 	})
 
-	// Link has been scrapped
+	// Url has been scrapped
 	c.OnScraped(func(r *colly.Response) {
 		url := r.Request.URL.String()
 		fmt.Println(" - Finished", url)
@@ -107,11 +119,9 @@ func main() {
 		// add compose to collection only when finish compose information page
 		if strings.Contains(url, "vlapr.jsp?") {
 			composes = append(composes, compose)
-			//sendPost(compose)
-		} else if strings.Contains(url, "&FH=") {
-			compose.Warns = append(compose.Warns, advise)
-		} else if strings.Contains(url, "&nombre=") {
-			compose.Notes = append(compose.Notes, advise)
+			sendPost(compose)
+			compose = Compose{}
+			advise = Advise{}
 		}
 	})
 
@@ -123,8 +133,10 @@ func main() {
 
 	// Iterate on each page ::
 	for i := 1; i <= pages; i++ {
-		_ = c.Visit(fmt.Sprintf("http://bdlep.inssbt.es/LEP/vlaallpr.jsp?Bloque=%d", i))
+		//		_ = c.Visit(fmt.Sprintf("http://bdlep.inssbt.es/LEP/vlaallpr.jsp?Bloque=%d", i))
 	}
+
+	_ = c.Visit("http://bdlep.inssbt.es/LEP/vlapr.jsp?ID=258&nombre=beta-Cloropreno")
 
 }
 
@@ -147,7 +159,6 @@ func sendPost(compose Compose) {
 	var jsonData []byte
 	jsonData, _ = json.Marshal(compose)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	req.Header.Set("X-Custom-Header", "myvalue")
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
@@ -161,10 +172,4 @@ func sendPost(compose Compose) {
 	fmt.Println("response Headers:", resp.Header)
 	body, _ := ioutil.ReadAll(resp.Body)
 	fmt.Println("response Body:", string(body))
-}
-
-
-func parseToNumber(string string) int {
-
-	return 1
 }
