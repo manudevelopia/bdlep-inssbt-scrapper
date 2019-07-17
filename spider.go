@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"github.com/gocolly/colly"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type Advise struct {
@@ -29,115 +27,99 @@ type Compose struct {
 }
 
 func main() {
-
+	pages := 1 //46
 	var composes []Compose
-	compose := Compose{}
 	advise := Advise{}
-	pages := 46
 
-	// Create collector
-	c := colly.NewCollector(
+	collector := colly.NewCollector(
 		colly.AllowedDomains("bdlep.inssbt.es"),
 	)
 
-	_ = c.Limit(&colly.LimitRule{
-		Delay: 10 * time.Second,
-	})
-
-	c.OnRequest(func(request *colly.Request) {
-		fmt.Println("Visiting: ", request.URL)
-	})
-
-	c.OnError(func(_ *colly.Response, err error) {
-		log.Println("Something went wrong:", err)
-	})
+	listRead := collector.Clone()
 
 	// Get all compose links
-	c.OnHTML("table[class='contents'] a[href*=nombre]", func(a *colly.HTMLElement) {
+	listRead.OnHTML("table[class='contents'] a[href*=nombre]", func(a *colly.HTMLElement) {
 		fmt.Println(a.Text)
 
-		compose.Url = a.Request.AbsoluteURL(a.Attr("href"))
-		compose.Name = a.Text
+		compose := Compose{Name: a.Text, Url: a.Request.AbsoluteURL(a.Attr("href"))}
 
-		_ = c.Visit(saneUrl(compose.Url))
-	})
+		composeRead := listRead.Clone()
 
-	// get nCAS, nCE and Compose Name
-	c.OnHTML("table[class='contents'] td", func(td *colly.HTMLElement) {
-		if strings.Contains(td.Request.URL.String(), "vlaallpr.jsp?Bloque=") {
-			fmt.Println(td.Text, td.Index)
-		}
-	})
+		// get nCAS, nCE
+		composeRead.OnHTML("span[class='destacado']", func(span *colly.HTMLElement) {
+			if span.Text == "Indicaciones de peligro H" || len(span.Text) <= 4 {
+				return
+			}
 
-	// get nCAS, nCE
-	c.OnHTML("span[class='destacado']", func(span *colly.HTMLElement) {
-		if span.Text == "Indicaciones de peligro H" || len(span.Text) <= 4 {
-			return
-		}
+			if span.Index == 0 {
+				compose.Ncas = span.Text
+			} else if span.Index == 1 {
+				compose.Nce = span.Text
+			}
+		})
 
-		if span.Index == 0 {
-			compose.Ncas = span.Text
-		} else if span.Index == 1 {
-			compose.Nce = span.Text
-		}
-	})
+		// get the 4 environmental values VLA-ED and VLA-EC
+		composeRead.OnHTML("table[class='valores'] tr:not([class='cabecera']) td", func(td *colly.HTMLElement) {
+			compose.Vlas[td.Index] = td.Text
+		})
 
-	// get the 4 environmental values VLA-ED and VLA-EC
-	c.OnHTML("table[class='valores'] tr:not([class='cabecera']) td", func(td *colly.HTMLElement) {
-		fmt.Printf("VL :: %s - %d\n", td.Text, td.Index)
+		// get the Notes and Warnings
+		composeRead.OnHTML("table[class='contents'] td", func(td *colly.HTMLElement) {
+			parseAdvise(td, &advise)
 
-		compose.Vlas[td.Index] = td.Text
-	})
-
-	// get the Notes and Warnings
-	c.OnHTML("table[class='contents'] td", func(td *colly.HTMLElement) {
-		if strings.Contains(td.Request.URL.String(), "vlaallpr.jsp?Bloque=") {
-			return
-		}
-
-		parseAdvise(td, &advise)
-
-		if advise.Title != "" {
-			if strings.Contains(td.Request.URL.String(), "&FH=") {
-				fmt.Printf("Warning :: %s - %d\n", td.Text, td.Index)
-				compose.Warns = append(compose.Warns, advise)
-				advise = Advise{}
-			} else if strings.Contains(td.Request.URL.String(), "&nombre=") {
+			if advise.Title != "" {
 				fmt.Printf("Note :: %s - %d\n", td.Text, td.Index)
 				compose.Notes = append(compose.Notes, advise)
 				advise = Advise{}
 			}
-		}
 
-	})
+		})
 
-	// Url has been scrapped
-	c.OnScraped(func(r *colly.Response) {
-		url := r.Request.URL.String()
-		fmt.Println(" - Finished", url)
+		// get the hazard advices links
+		composeRead.OnHTML("a[title='Indicaciones de peligro H']", func(a *colly.HTMLElement) {
+			link := a.Request.AbsoluteURL(a.Attr("href"))
 
-		// add compose to collection only when finish compose information page
-		if strings.Contains(url, "vlapr.jsp?") {
+			hazardAdvicesRead := listRead.Clone()
+
+			hazardAdvicesRead.OnHTML("table[class='contents'] td", func(td *colly.HTMLElement) {
+				parseAdvise(td, &advise)
+
+				if advise.Title != "" {
+					fmt.Printf("Warning :: %s - %d\n", td.Text, td.Index)
+					compose.Warns = append(compose.Warns, advise)
+					advise = Advise{}
+				}
+			})
+
+			_ = hazardAdvicesRead.Visit(saneUrl(link))
+		})
+
+		// get info for linked component
+		composeRead.OnHTML("a[title='Agente Quimico']", func(a *colly.HTMLElement) {
+			compose.Parent = a.Text
+		})
+
+		composeRead.OnScraped(func(response *colly.Response) {
+			fmt.Println("Finished compose: " + compose.Name)
 			composes = append(composes, compose)
 			sendPost(compose)
-			compose = Compose{}
-			advise = Advise{}
-		}
+		})
+
+		_ = composeRead.Visit(saneUrl(compose.Url))
 	})
 
-	// get the hazard advices links
-	c.OnHTML("a[title='Indicaciones de peligro H']", func(a *colly.HTMLElement) {
-		link := a.Request.AbsoluteURL(a.Attr("href"))
-		_ = c.Visit(saneUrl(link))
+	listRead.OnScraped(func(response *colly.Response) {
+		fmt.Println("Finish Reading> " + response.Request.URL.String())
+	})
+
+	listRead.OnRequest(func(request *colly.Request) {
+		fmt.Println("Start Reading> " + request.URL.String())
 	})
 
 	// Iterate on each page ::
 	for i := 1; i <= pages; i++ {
-		//		_ = c.Visit(fmt.Sprintf("http://bdlep.inssbt.es/LEP/vlaallpr.jsp?Bloque=%d", i))
+		_ = listRead.Visit(fmt.Sprintf("http://bdlep.inssbt.es/LEP/vlaallpr.jsp?Bloque=%d", i))
 	}
-
-	_ = c.Visit("http://bdlep.inssbt.es/LEP/vlapr.jsp?ID=258&nombre=beta-Cloropreno")
-
 }
 
 func parseAdvise(tdAdvise *colly.HTMLElement, advice *Advise) {
