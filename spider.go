@@ -7,6 +7,7 @@ import (
 	"github.com/gocolly/colly"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -27,7 +28,7 @@ type Compose struct {
 }
 
 func main() {
-	pages := 1 //46
+	pages := 46º
 	var composes []Compose
 	advise := Advise{}
 
@@ -60,7 +61,7 @@ func main() {
 
 		// get the 4 environmental values VLA-ED and VLA-EC
 		composeRead.OnHTML("table[class='valores'] tr:not([class='cabecera']) td", func(td *colly.HTMLElement) {
-			compose.Vlas[td.Index] = td.Text
+			compose.Vlas[td.Index] = saneText(td.Text)
 		})
 
 		// get the Notes and Warnings
@@ -96,20 +97,24 @@ func main() {
 
 		// get info for linked component
 		composeRead.OnHTML("a[title='Agente Quimico']", func(a *colly.HTMLElement) {
-			compose.Parent = a.Text
+			compose.Parent = saneText(a.Text)
 		})
 
 		composeRead.OnScraped(func(response *colly.Response) {
 			fmt.Println("Finished compose: " + compose.Name)
 			composes = append(composes, compose)
-			sendPost(compose)
 		})
 
 		_ = composeRead.Visit(saneUrl(compose.Url))
 	})
 
 	listRead.OnScraped(func(response *colly.Response) {
-		fmt.Println("Finish Reading> " + response.Request.URL.String())
+		url := response.Request.URL.String()
+		fmt.Println("Finish Reading> " + url)
+
+		if strings.HasSuffix(url, strconv.Itoa(pages)) {
+			sendPost(composes)
+		}
 	})
 
 	listRead.OnRequest(func(request *colly.Request) {
@@ -134,12 +139,19 @@ func saneUrl(url string) string {
 	return strings.ReplaceAll(url, " ", "%20")
 }
 
-func sendPost(compose Compose) {
-	url := "http://localhost:8080/api/scrapper/compound"
+func saneText(text string) string {
+	text = strings.ReplaceAll(text, "\n\t\t\t\t\t\t\t","")
+	text = strings.TrimSpace(text)
+
+	return text
+}
+
+func sendPost(composes []Compose) {
+	url := "http://localhost:8080/api/scrapper/compounds"
 	fmt.Println("URL:>", url)
 
 	var jsonData []byte
-	jsonData, _ = json.Marshal(compose)
+	jsonData, _ = json.Marshal(composes)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
