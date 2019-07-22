@@ -28,7 +28,7 @@ type Compose struct {
 }
 
 func main() {
-	pages := 46º
+	pages := 46
 	var composes []Compose
 	advise := Advise{}
 
@@ -140,7 +140,7 @@ func saneUrl(url string) string {
 }
 
 func saneText(text string) string {
-	text = strings.ReplaceAll(text, "\n\t\t\t\t\t\t\t","")
+	text = strings.ReplaceAll(text, "\n\t\t\t\t\t\t\t", "")
 	text = strings.TrimSpace(text)
 
 	return text
