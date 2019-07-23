@@ -1,4 +1,4 @@
-# bdlep-inssbt-spider
+# bdlep-inssbt-scrapper
 
 This tool scraps http://bdlep.inssbt.es/LEP/ just to retrieve chemical composes information (NºCE, NºCAS, VLA-Xx, Notes, Warning advices, ..) and provide it to 
 Prevengic https://prevengic.herokuapp.com. 
@@ -21,3 +21,6 @@ Why not!! By using it makes me to get outside from my daily work language.
 - Store information by each compose
 
 - Report compose information Prevengic application
+
+### Result
+Gathered data will be added to the current version of Prevengic application. You can find last version of code at https://github.com/manudevelopia/prevengic and use application at https://prevengic.herokuapp.com
